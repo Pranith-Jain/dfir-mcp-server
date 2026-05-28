@@ -1,0 +1,34 @@
+{
+  "name": "dfir-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for DFIR Toolkit & Threat Intelligence platform — 20 tools for IOC checking, CVE lookup, threat actor enrichment, phishing analysis, and more.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "agents": "^0.13.3",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260507.1",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.88.0"
+  },
+  "keywords": [
+    "mcp",
+    "dfir",
+    "threat-intelligence",
+    "osint",
+    "cybersecurity",
+    "ioc",
+    "cve",
+    "ransomware",
+    "cloudflare-workers"
+  ],
+  "author": "Pranith Jain",
+  "license": "MIT"
+}
