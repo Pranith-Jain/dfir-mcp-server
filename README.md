@@ -98,6 +98,15 @@ npx wrangler deploy
 
 The MCP server proxies requests to the [DFIR Toolkit API](https://pranithjain.qzz.io/dfir) — no API keys required for read-only tools.
 
+## Authentication
+
+Most lookup/read tools work with **no key**. A few tools need a token, passed by your MCP client as `Authorization: Bearer <token>` (or `X-API-Key`), which the server forwards to the API:
+
+- **API key** — required for write/analysis tools (e.g. `analyze_phishing_url`, `analyze_phishing_email`).
+- **Admin token** — required for operator-only tools (`parse_threat_report`, `generate_yara_rule`, `validate_yara_rule`, `get_domain_certs`, `watch_domain_ct`).
+
+**Need a token?** Reach out and request one: **[linkedin.com/in/pranithjain](https://www.linkedin.com/in/pranithjain)**.
+
 ## Development
 
 ```bash
