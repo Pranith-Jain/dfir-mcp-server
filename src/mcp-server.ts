@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
+import type { Connection, ConnectionContext } from 'agents';
 import { z } from 'zod';
 
 type Env = {
@@ -38,20 +39,23 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, {}> {
   private apiKey: string | undefined;
 
   /**
-   * Called when a new MCP client connects. Extracts the API key from the
-   * Authorization header for downstream API calls.
+   * Called when a new MCP client connects. Captures the caller's API key from
+   * the initial request headers (the streamable-HTTP transport forwards the
+   * original client headers on the connection request) so the tool handlers
+   * below can authorize downstream API calls.
    */
-  async onConnect(connection: unknown): Promise<void> {
-    // McpAgent passes the request context through props or connection metadata.
-    // For Streamable HTTP transport, the API key is in the initial request headers.
-    // We store it on the instance for all subsequent tool calls.
-    const req = (this as unknown as { request?: Request }).request;
-    if (req) {
-      const authz = req.headers.get('authorization') ?? '';
-      const bearer = /^Bearer\s+(.+)$/i.exec(authz)?.[1];
-      const apiKey = req.headers.get('x-api-key');
-      this.apiKey = bearer ?? apiKey ?? undefined;
-    }
+  async onConnect(conn: Connection, ctx: ConnectionContext): Promise<void> {
+    const authz = ctx.request.headers.get('authorization') ?? '';
+    const bearer = /^Bearer\s+(.+)$/i.exec(authz)?.[1];
+    const apiKey = ctx.request.headers.get('x-api-key') ?? undefined;
+    this.apiKey = bearer ?? apiKey ?? undefined;
+
+    // CRITICAL: delegate to the base McpAgent. Its onConnect wires the
+    // streamable-HTTP transport (handlePostRequest / handleGetRequest) — i.e.
+    // it feeds JSON-RPC messages into the MCP server. Without this super call,
+    // every message (starting with `initialize`) is dropped: the server returns
+    // 200 + a session id but never writes a response, so clients hang on connect.
+    await super.onConnect(conn, ctx);
   }
 
   async init() {
