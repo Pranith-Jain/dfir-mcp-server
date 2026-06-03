@@ -26,6 +26,47 @@ async function apiFetch<T>(path: string, apiKey?: string, init?: RequestInit): P
   return res.json() as Promise<T>;
 }
 
+/**
+ * Read a Server-Sent-Events endpoint to completion and return the parsed
+ * payloads. `/ioc/check` streams per-provider results as `event: <name>` +
+ * `data: <json>` blocks (provider fan-out), so it can't be consumed with
+ * `.json()` — buffer the whole stream and parse the SSE frames.
+ */
+async function apiFetchSse(
+  path: string,
+  apiKey?: string
+): Promise<{ events: Array<{ event: string; data: unknown }> }> {
+  const headers: Record<string, string> = { accept: 'text/event-stream' };
+  if (apiKey) {
+    headers['authorization'] = `Bearer ${apiKey}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`API ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const text = await res.text();
+  const events: Array<{ event: string; data: unknown }> = [];
+  for (const block of text.split('\n\n')) {
+    let event = 'message';
+    const dataLines: string[] = [];
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    if (dataLines.length === 0) continue;
+    const raw = dataLines.join('\n');
+    let data: unknown = raw;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      /* non-JSON data — keep the raw string */
+    }
+    events.push({ event, data });
+  }
+  return { events };
+}
+
 export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<string, never>> {
   server = new McpServer({
     name: 'DFIR-ThreatIntel-MCP',
@@ -63,7 +104,9 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       'Check reputation of an IP address, domain, URL, or file hash (MD5/SHA1/SHA256) across 30+ threat intelligence providers. Returns composite score, admiralty grade, and per-provider verdicts.',
       { indicator: z.string().describe('The IOC to check — IP, domain, URL, or hash') },
       async ({ indicator }) => {
-        const data = await apiFetch<Record<string, unknown>>(
+        // /ioc/check streams per-provider results over SSE — read the whole
+        // stream and return the aggregated events (metadata + per-provider).
+        const data = await apiFetchSse(
           `/api/v1/ioc/check?indicator=${encodeURIComponent(indicator)}`,
           this.apiKey
         );
@@ -85,19 +128,9 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       }
     );
 
-    // ── CVE Search ───────────────────────────────────────────────────────
-    this.server.tool(
-      'search_cve',
-      'Search CVEs by keyword. Returns matching CVE IDs with severity and brief descriptions.',
-      { q: z.string().describe('Search keyword — vendor, product, or vulnerability type') },
-      async ({ q }) => {
-        const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/cve/search?q=${encodeURIComponent(q)}`,
-          this.apiKey
-        );
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-      }
-    );
+    // (search_cve removed — the API has no keyword CVE search; /cve/search is
+    //  an alias of /cve/lookup and only accepts ?id=, so the tool duplicated
+    //  lookup_cve while advertising keyword search it couldn't deliver.)
 
     // ── Threat Actor Enrichment ──────────────────────────────────────────
     this.server.tool(
@@ -106,7 +139,7 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       { actor: z.string().describe('Threat actor name or slug, e.g. APT28, lazarus-group') },
       async ({ actor }) => {
         const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/actor-enrich?actor=${encodeURIComponent(actor)}`,
+          `/api/v1/actor-enrich?name=${encodeURIComponent(actor)}`,
           this.apiKey
         );
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
@@ -289,7 +322,7 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       },
       async ({ target, type }) => {
         const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/breach/${type}?q=${encodeURIComponent(target)}`,
+          `/api/v1/breach/${type}?${type}=${encodeURIComponent(target)}`,
           this.apiKey
         );
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
@@ -313,8 +346,10 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       'Look up a MITRE ATT&CK technique by ID. Returns technique name, description, tactics, mitigations, and detection guidance.',
       { technique_id: z.string().describe('MITRE ATT&CK technique ID, e.g. T1566.001') },
       async ({ technique_id }) => {
+        // The route validates ?id= but the handler reads ?technique= — send both.
+        const enc = encodeURIComponent(technique_id);
         const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/mitre/technique?id=${encodeURIComponent(technique_id)}`,
+          `/api/v1/mitre/technique?id=${enc}&technique=${enc}`,
           this.apiKey
         );
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
@@ -327,8 +362,10 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
       'Get the relationship graph for an IOC — shows connections to threat actors, malware families, campaigns, CVEs, and other indicators.',
       { indicator: z.string().describe('The IOC to get relationships for') },
       async ({ indicator }) => {
+        // The route validates ?indicator= but the handler reads ?q= — send both.
+        const enc = encodeURIComponent(indicator);
         const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/relationship-graph?indicator=${encodeURIComponent(indicator)}`,
+          `/api/v1/relationship-graph?indicator=${enc}&q=${enc}`,
           this.apiKey
         );
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
@@ -432,8 +469,18 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
         dork_type: z.enum(['files', 'login', 'sensitive', 'all']).optional().describe('Type of dorks to run'),
       },
       async ({ domain, dork_type }) => {
+        // The route validates ?domain= but the handler runs ?q= as the actual
+        // Google query — send the domain (for the schema) plus a dork built
+        // from the requested category.
+        const dorks: Record<string, string> = {
+          files: `site:${domain} (ext:pdf OR ext:doc OR ext:docx OR ext:xls OR ext:xlsx OR ext:txt OR ext:log OR ext:bak)`,
+          login: `site:${domain} (inurl:login OR inurl:admin OR inurl:signin OR intitle:"log in")`,
+          sensitive: `site:${domain} (ext:env OR ext:sql OR ext:bak OR ext:config OR intitle:"index of" OR intext:"password")`,
+          all: `site:${domain}`,
+        };
+        const q = dorks[dork_type ?? 'all'] ?? `site:${domain}`;
         const data = await apiFetch<Record<string, unknown>>(
-          `/api/v1/google-dorks?domain=${encodeURIComponent(domain)}&type=${dork_type ?? 'all'}`,
+          `/api/v1/google-dorks?domain=${encodeURIComponent(domain)}&q=${encodeURIComponent(q)}`,
           this.apiKey
         );
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
