@@ -24,8 +24,8 @@ export default {
     if (url.pathname === '/' || url.pathname === '/health') {
       return Response.json({
         name: 'DFIR-ThreatIntel MCP Server',
-        version: '1.0.0',
-        tools: 20,
+        version: '2.0.0',
+        tools: 98,
         transport: {
           streamable_http: '/mcp',
           sse: '/sse',
