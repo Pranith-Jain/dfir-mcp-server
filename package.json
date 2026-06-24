@@ -1,7 +1,7 @@
 {
   "name": "dfir-mcp-server",
   "version": "1.0.0",
-  "description": "MCP server for DFIR Toolkit & Threat Intelligence platform — 20 tools for IOC checking, CVE lookup, threat actor enrichment, phishing analysis, and more.",
+  "description": "MCP server for DFIR Toolkit & Threat Intelligence platform — 98 tools for IOC checking, CVE lookup, threat actor enrichment, phishing analysis, and more.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
