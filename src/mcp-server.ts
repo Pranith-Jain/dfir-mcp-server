@@ -1608,5 +1608,133 @@ export class DfirMcpServer extends McpAgent<Env, Record<string, never>, Record<s
         return jsonResult(data);
       }
     );
+
+    // ── Threat Intel (TI) — CVE/KEV/IOC/sector brief ───────────────────
+    this.server.tool(
+      'ti_list_cves',
+      'List CVEs from the threat-intel vertical (NVD + CISA KEV). CVEs are enriched with priority scoring (CVSS + KEV + recency). Filter by severity, KEV-only, vendor, recency, or keyword.',
+      {
+        severity: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Filter by CVSS v3 severity band'),
+        kevOnly: z.boolean().optional().describe('Only return CVEs in CISA Known Exploited Vulnerabilities catalog'),
+        vendor: z.string().optional().describe('Case-insensitive substring match against vendor field'),
+        daysBack: z.number().int().min(1).max(365).optional().describe('Only CVEs published within this many days'),
+        minPriority: z.number().int().min(0).max(100).optional().describe('Minimum priority score (0-100)'),
+        keyword: z.string().optional().describe('Case-insensitive substring match against CVE ID / vendor / product / description'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max CVEs to return (default 50)'),
+      },
+      async ({ severity, kevOnly, vendor, daysBack, minPriority, keyword, limit }) => {
+        const p = new URLSearchParams();
+        if (severity) p.set('severity', severity);
+        if (kevOnly) p.set('kevOnly', 'true');
+        if (vendor) p.set('vendor', vendor);
+        if (daysBack) p.set('daysBack', String(daysBack));
+        if (minPriority) p.set('minPriority', String(minPriority));
+        if (keyword) p.set('keyword', keyword);
+        if (limit) p.set('limit', String(limit));
+        const qs = p.toString();
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/cves${qs ? `?${qs}` : ''}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_get_cve',
+      'Return the full CVE body with CVSS vector, CWE IDs, references, and (where populated) BSI description and LLM summary/recommended action. Use ti_list_cves first to discover CVE IDs.',
+      {
+        cveId: z.string().describe('CVE ID, e.g. "CVE-2026-1001". Case-insensitive.'),
+      },
+      async ({ cveId }) => {
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/cves/${encodeURIComponent(cveId)}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_list_kev',
+      'Return the full CISA Known Exploited Vulnerabilities (KEV) snapshot — actively exploited CVEs with required actions and due dates. Each entry includes vendor, product, short description, required action, and due date.',
+      {
+        vendor: z.string().optional().describe('Filter by vendor (case-insensitive substring)'),
+        limit: z.number().int().min(1).max(500).optional().describe('Max KEV entries to return (default 100)'),
+      },
+      async ({ vendor, limit }) => {
+        const p = new URLSearchParams();
+        if (vendor) p.set('vendor', vendor);
+        if (limit) p.set('limit', String(limit));
+        const qs = p.toString();
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/kev${qs ? `?${qs}` : ''}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_list_iocs',
+      'List IOC families (ransomware, malware, APT groups, C2 frameworks, stealers, phishing kits) from the threat-intel vertical, sourced from Daily-Hunt references.',
+      {
+        category: z.enum(['ransomware', 'malware', 'apt', 'c2', 'phishing', 'stealer', 'other']).optional().describe('Filter by IOC category'),
+        keyword: z.string().optional().describe('Case-insensitive substring match against slug / family name / aliases / description'),
+        limit: z.number().int().min(1).max(100).optional().describe('Max families to return (default 50)'),
+      },
+      async ({ category, keyword, limit }) => {
+        const p = new URLSearchParams();
+        if (category) p.set('category', category);
+        if (keyword) p.set('keyword', keyword);
+        if (limit) p.set('limit', String(limit));
+        const qs = p.toString();
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/iocs${qs ? `?${qs}` : ''}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_get_ioc',
+      'Return the full IOC family body with indicators, MITRE techniques, context, and (where populated) LLM summary. Use ti_list_iocs first to discover family slugs.',
+      {
+        slug: z.string().describe('IOC family slug, e.g. "lockbit-4-0-ransomware". Get these from ti_list_iocs.'),
+      },
+      async ({ slug }) => {
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/iocs/${encodeURIComponent(slug)}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_brief_sector',
+      'Return a sector-specific threat brief (Financial, Healthcare, or Government) from the threat-intel vertical. Each brief includes an executive summary, top N sector-relevant threats with risk assessments and recommended actions.',
+      {
+        sector: z.enum(['financial', 'healthcare', 'government']).describe('Target sector for the brief'),
+      },
+      async ({ sector }) => {
+        const data = await apiFetch<Record<string, unknown>>(
+          `/api/v1/threat-intel/sectors/${encodeURIComponent(sector)}`,
+          this.apiKey
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
+
+    this.server.tool(
+      'ti_stats',
+      'Return cache + manifest stats for the Threat Intel data: index loaded, KEV loaded, body-cache sizes and hit ratios. Useful for diagnosing cold-start latency.',
+      {},
+      async () => {
+        const data = await apiFetch<Record<string, unknown>>('/api/v1/threat-intel/stats', this.apiKey);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+    );
   }
 }
