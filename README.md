@@ -1,10 +1,71 @@
 # DFIR & Threat Intelligence MCP Server
 
-MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence tools for AI agents. Built on Cloudflare Workers with Durable Objects.
+MCP (Model Context Protocol) server exposing **98 DFIR and threat intelligence tools** for AI agents. Built on Cloudflare Workers with Durable Objects.
 
-## Tools
+Proxies the [pranithjain.qzz.io](https://pranithjain.qzz.io) DFIR Toolkit API — no infrastructure to run, no API keys required for read-only tools.
+
+---
+
+## Quick Start
+
+### 1. Deploy
+
+```bash
+npm install
+npx wrangler deploy
+```
+
+### 2. Connect your MCP client
+
+**Claude Desktop** (`~/.config/claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dfir": {
+      "url": "https://dfir-mcp-server.<your-subdomain>.workers.dev/mcp"
+    }
+  }
+}
+```
+
+**Cursor** (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "dfir": {
+      "url": "https://dfir-mcp-server.<your-subdomain>.workers.dev/mcp"
+    }
+  }
+}
+```
+
+### 3. Authenticate
+
+All tools require an API key. Provide it via:
+
+- `Authorization: Bearer <key>` header
+- `X-API-Key: <key>` header
+
+Get an API key at [pranithjain.qzz.io](https://pranithjain.qzz.io).
+
+---
+
+## Transports
+
+| Transport | Path | Use |
+|-----------|------|-----|
+| Streamable HTTP | `/mcp` | Recommended for modern clients |
+| SSE | `/sse` | Legacy clients |
+| Health | `/` | Server info + tool count |
+
+---
+
+## Tools (98)
 
 ### IOC & Threat Intelligence
+
 | Tool | Description |
 |------|-------------|
 | `check_ioc` | IP/domain/URL/hash reputation (30+ providers) |
@@ -18,6 +79,7 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `ioc_watchlist_stats` | Watchlist dashboard stats |
 
 ### CVE Intelligence
+
 | Tool | Description |
 |------|-------------|
 | `lookup_cve` | CVE details + CVSS + EPSS + KEV |
@@ -27,14 +89,15 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `soc_cve_report` | SOC CVE intelligence report generator |
 
 ### Threat Actors & Malware
+
 | Tool | Description |
 |------|-------------|
 | `enrich_actor` | Threat actor profile + TTPs + campaigns |
 | `search_malpedia` | Malpedia malware/actor search |
 | `search_malware` | Malware family search |
-| `search_triage` | Recorded Future Triage sandbox search |
 
 ### Domain & Infrastructure
+
 | Tool | Description |
 |------|-------------|
 | `lookup_domain` | DNS, RDAP, CT logs, SPF/DKIM/DMARC |
@@ -50,14 +113,17 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `passive_dns_overlap` | Infrastructure overlap detection |
 
 ### Phishing & Web
+
 | Tool | Description |
 |------|-------------|
 | `analyze_phishing_email` | Raw email → header/auth/URL risk analysis |
 | `analyze_phishing_url` | URL phishing analysis |
 | `scan_website` | Security headers + SSL + tech detection |
 | `google_dorks` | Google dork query generation |
+| `wayback_lookup` | Wayback Machine historical snapshots |
 
 ### Briefings & News
+
 | Tool | Description |
 |------|-------------|
 | `get_today_briefing` | Today's threat intel briefing |
@@ -68,8 +134,11 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `get_detections` | Sigma/YARA/Snort detection rules |
 | `get_threat_pulse` | Global threat overview |
 | `cyber_news` | Cybersecurity RSS news aggregator |
+| `get_feed_status` | Health of all 30+ feed sources |
+| `unified_search` | Cross-source search across all feeds |
 
 ### Report Analysis
+
 | Tool | Description |
 |------|-------------|
 | `parse_threat_report` | Extract IOCs/actors/TTPs from reports |
@@ -78,8 +147,10 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `extract_fivew` | 5W grid (who/what/when/where/why) |
 | `extract_iocs_from_image` | OCR image for embedded IOCs |
 | `get_cross_report_graph` | Cross-report knowledge graph |
+| `get_relationships` | IOC relationship graph |
 
 ### Detection & MITRE
+
 | Tool | Description |
 |------|-------------|
 | `lookup_mitre` | MITRE ATT&CK technique lookup |
@@ -87,6 +158,7 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `validate_yara_rule` | YARA syntax validation |
 
 ### Crypto & Breach
+
 | Tool | Description |
 |------|-------------|
 | `trace_crypto_address` | Cryptocurrency wallet tracing |
@@ -94,6 +166,7 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `get_blocklists` | Firewall blocklists (pfSense/iptables/Suricata) |
 
 ### Investigation Tools
+
 | Tool | Description |
 |------|-------------|
 | `notebook_list` | List investigation notebooks |
@@ -115,6 +188,7 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `ws_workflow_summary` | Workspace phase summary |
 
 ### Telegram Intelligence
+
 | Tool | Description |
 |------|-------------|
 | `tg_boolean_search` | Boolean Telegram leak search |
@@ -124,6 +198,7 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `tg_saved_search_delete` | Delete saved search |
 
 ### HudsonRock (Infostealer)
+
 | Tool | Description |
 |------|-------------|
 | `hr_search_email` | Search by email |
@@ -136,62 +211,19 @@ MCP (Model Context Protocol) server exposing 98 DFIR and threat intelligence too
 | `hr_search_ip` | Search by IP/CIDR |
 | `hr_account` | API account status check |
 
-### Report Analysis (Advanced)
+### Threat Intel Vertical (CVE/KEV/IOC/Sector)
+
 | Tool | Description |
 |------|-------------|
-| `extract_ttps` | MITRE ATT&CK technique extraction |
-| `extract_fivew` | 5W context extraction |
-| `extract_iocs_from_image` | Image OCR for IOCs |
-| `analyze_report` | Unified report analyzer |
-| `get_cross_report_graph` | Cross-report knowledge graph |
+| `ti_list_cves` | List CVEs from NVD + CISA KEV |
+| `ti_get_cve` | Full CVE body with CVSS vector + references |
+| `ti_list_kev` | CISA KEV snapshot |
+| `ti_list_iocs` | List IOC families (ransomware/malware/APT) |
+| `ti_get_ioc` | Full IOC family body with indicators |
+| `ti_brief_sector` | Sector-specific threat brief |
+| `ti_stats` | Cache + manifest stats |
 
-## Quick Start
-
-### 1. Install dependencies
-
-```bash
-npm install
-```
-
-### 2. Deploy to Cloudflare Workers
-
-```bash
-npx wrangler deploy
-```
-
-### 3. Connect your MCP client
-
-**Claude Desktop** (`~/.config/claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "dfir-threatintel": {
-      "url": "https://dfir-mcp-server.<your-subdomain>.workers.dev/mcp"
-    }
-  }
-}
-```
-
-**Cursor** (`.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "dfir-threatintel": {
-      "url": "https://dfir-mcp-server.<your-subdomain>.workers.dev/mcp"
-    }
-  }
-}
-```
-
-## Transports
-
-| Transport | Path | Use |
-|-----------|------|-----|
-| Streamable HTTP | `/mcp` | Recommended for modern clients |
-| SSE | `/sse` | Legacy clients |
-| Health | `/` | Server info + tool count |
+---
 
 ## Architecture
 
@@ -215,13 +247,7 @@ npx wrangler deploy
 
 The MCP server proxies requests to the [DFIR Toolkit API](https://pranithjain.qzz.io/dfir) — no API keys required for read-only tools.
 
-## Authentication
-
-Some tools require an API key. Provide it via:
-- `Authorization: Bearer <key>` header
-- `X-API-Key: <key>` header
-
-Get an API key at [pranithjain.qzz.io](https://pranithjain.qzz.io).
+---
 
 ## License
 
